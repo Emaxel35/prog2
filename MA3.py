@@ -12,6 +12,7 @@ import math as m
 import concurrent.futures as future
 from statistics import mean 
 from time import perf_counter as pc
+from numba import njit
 
 # Exc1
 def approximate_pi(n):
@@ -31,22 +32,26 @@ def approximate_pi(n):
          else:
               x_ut.append(x)
               y_ut.append(y)
-
+    plt.figure()
     plt.scatter(x_ut, y_ut, color = "red")
     plt.scatter(x_in, y_in, color = "Blue")
     plt.savefig(F"pi är ungefär för {n}")
+    plt.close()
 
     pi_approx = 4 * (I/n)
 
     return pi_approx
 
 # Exc2, approximation
-def sphere_volume(n, d): 
-    points = ([random.uniform(-1, 1) for _ in range(d)] for _ in range(n))
-
-    inside = sum(1 for p in points if sum(map(lambda x: x**2, p)) <= 1)
-
-    return (inside / n) * (2 ** d)
+def sphere_volume(n, d):
+    I = 0
+    for _ in range(n):
+        x_val = [random.uniform(-1,1) for _ in range(d)]
+        x_kvad = list(map(lambda x: x**2, x_val))
+        if sum(x_kvad) <= 1:
+               I += 1
+        volym = (I/n) * (2**d)
+    return volym
 
 
 #Exc2, real value
@@ -55,27 +60,26 @@ def hypersphere_exact(n, d):
     return (m.pi ** (d / 2)) / m.gamma(d / 2 + 1)
 
 #Exc3: numba version
+@njit
 def sphere_volume_numba(n:int, d:int)->float:
-    inside = 0
+    I = 0
     for _ in range(n):
-        sum_sq = 0.0
-        for _ in range(d):
-            sum_sq += random.uniform(-1, 1)**2
-        if sum_sq <= 1.0:
-            inside += 1
-            
-    return (inside / n) * (2**d)
+        x_val = [random.uniform(-1,1) for _ in range(d)]
+        x_kvad = list(map(lambda x: x**2, x_val))
+        if sum(x_kvad) <= 1:
+               I += 1
+        volym = (I/n) * (2**d)   
+    return volym
 
 #Exc4: parallel code - parallelize actual computations by splitting data
 def sphere_volume_parallel(n, d, np=10):
-    chunk_size = n // np
-    args_n = [chunk_size] * np
-    args_d = [d] * np
-    with future.ProcessPoolExecutor(max_workers=np) as executor:
+     
+     ln = [int(n/np) for _ in range(np)]
+     ld = [d for _ in range(np)]
 
-        volumes = list(executor.map(sphere_volume, args_n, args_d))
-
-    return mean(volumes)
+     with future.ProcessPoolExecutor(max_workers=np) as exe:
+          resultat = list(exe.map(sphere_volume, ln, ld))
+     return mean(resultat)
     
 def main():
     # Exc1
@@ -86,23 +90,33 @@ def main():
     # Exc2
     n = 100000
     d = 2
-    sphere_volume(n, d)
+    print(f"approx volume of {d} dimentional sphere = {sphere_volume(n, d)}")
     print(f"Actual volume of {d} dimentional sphere = {hypersphere_exact(n,d)}")
 
     n = 100000
     d = 11
-    sphere_volume(n, d)
+    print(f"approx volume of {d} dimentional sphere = {sphere_volume(n, d)}")
     print(f"Actual volume of {d} dimentional sphere = {hypersphere_exact(n,d)}")
+    
 
     # Exc3
     n = 1000000
     d = 11
-    start = pc()
-    sphere_volume(n, d)
-    stop = pc()
-    print(f"Exc3: Sequential time of {d} and {n}: {stop-start}")
-    print("What is numba time?")
+    
+    for x in range(1, 4):
+        start = pc()
+        sphere_volume(n, d)
+        stop = pc()
+        print(f"Exc3: Run {x} Sequential time of {d} and {n}: {stop-start}")
 
+    print("What is numba time?")
+    for x in range(1, 4):
+        start = pc()
+        sphere_volume_numba(n, d)
+        stop = pc()
+        print(f"Exc3: Run {x} Numba time of {d} and {n}: {stop-start}")
+
+    
     # Exc4
     n = 1000000
     d = 11
@@ -111,6 +125,10 @@ def main():
     stop = pc()
     print(f"Exc4: Sequential time of {d} and {n}: {stop-start}")
     print("What is parallel time?")
+    start = pc()
+    sphere_volume_parallel(n,d,2)
+    stop = pc()
+    print(f"Exc4: Parallel time of {d} and {n}: {stop-start}")
 
     
     
